@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import FloorPlan from "@/components/FloorPlan";
 import UploadScreen from "@/components/UploadScreen";
 import TableDetail from "@/components/TableDetail";
@@ -24,6 +24,7 @@ interface State {
 }
 
 export default function Home() {
+  const reduce = useReducedMotion();
   const [state, setState] = useState<State | null>(null);
   const [date, setDate] = useState(todayISO());
   const [viewMin, setViewMin] = useState(18 * 60);
@@ -40,6 +41,9 @@ export default function Home() {
   >({});
   const [saving, setSaving] = useState(false);
   const [menu, setMenu] = useState<{ id: number; x: number; y: number } | null>(null);
+  // Which way the next room transition should travel: 1 for a later room, -1
+  // for an earlier one, so the plan slides the way the dots imply.
+  const [dir, setDir] = useState(1);
 
   const load = useCallback(async (d: string) => {
     const res = await fetch(`/api/state?date=${d}`, { cache: "no-store" });
@@ -169,30 +173,51 @@ export default function Home() {
     >
       {/* The plan owns the screen. Everything else floats over it. */}
       <motion.div
-        className="absolute inset-0"
+        className="absolute inset-0 pt-16 pb-24 px-[clamp(12px,3vw,40px)]"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.45, ease: "easeOut" }}
       >
-        <div className="h-full w-full pt-16 pb-24 px-[clamp(12px,3vw,40px)]">
-          <div className="h-full w-full">
-            <FloorPlan
-              room={room}
-              tables={roomTables}
-              occupancy={occupancy}
-              focusedId={focusedId}
-              onFocus={setFocusedId}
-              editing={editing}
-              onContextMenu={(id, x, y) => setMenu({ id, x, y })}
-              onChange={(updates) =>
-                setDraft((d) => {
-                  const next = { ...d };
-                  for (const u of updates) next[u.id] = { x: u.x, y: u.y, group_id: u.group };
-                  return next;
-                })
+        {/* Rooms slide past each other. The stage clips at the plan's own
+            bounds so the outgoing room never spills over the controls. */}
+        <div className="relative h-full w-full overflow-hidden">
+          <AnimatePresence initial={false} mode="popLayout" custom={dir}>
+            <motion.div
+              key={room.id}
+              custom={dir}
+              className="absolute inset-0"
+              variants={{
+                enter: (d: number) => ({ x: reduce ? 0 : `${d * 100}%`, opacity: reduce ? 0 : 1 }),
+                center: { x: 0, opacity: 1 },
+                exit: (d: number) => ({ x: reduce ? 0 : `${d * -100}%`, opacity: reduce ? 0 : 1 }),
+              }}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={
+                reduce
+                  ? { duration: 0.12 }
+                  : { duration: 0.46, ease: [0.32, 0.72, 0, 1] }
               }
-            />
-          </div>
+            >
+              <FloorPlan
+                room={room}
+                tables={roomTables}
+                occupancy={occupancy}
+                focusedId={focusedId}
+                onFocus={setFocusedId}
+                editing={editing}
+                onContextMenu={(id, x, y) => setMenu({ id, x, y })}
+                onChange={(updates) =>
+                  setDraft((d) => {
+                    const next = { ...d };
+                    for (const u of updates) next[u.id] = { x: u.x, y: u.y, group_id: u.group };
+                    return next;
+                  })
+                }
+              />
+            </motion.div>
+          </AnimatePresence>
         </div>
       </motion.div>
 
@@ -336,7 +361,12 @@ export default function Home() {
               <RoomDots
                 rooms={state.rooms}
                 index={roomIndex}
-                onChange={(i) => { setRoomIndex(i); setFocusedId(null); }}
+                onChange={(i) => {
+                  if (i === roomIndex) return;
+                  setDir(i > roomIndex ? 1 : -1);
+                  setRoomIndex(i);
+                  setFocusedId(null);
+                }}
               />
             </motion.div>
           ) : null}
