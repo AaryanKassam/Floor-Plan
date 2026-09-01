@@ -60,3 +60,46 @@ first-run snag.
 6. **Settings**, bottom left, changes the floor material and table colours.
 7. **Bookings**, top right, lists and cancels reservations.
 
+
+## Optional: mirror bookings to a Google Sheet
+
+Every confirmed reservation can be appended to a Google Sheet, and cancelling a
+booking removes its row again. This is optional. Without it, bookings simply
+stay in the local database.
+
+It uses an Apps Script Web App bound to your sheet, so there is no Google Cloud
+project, no service account and no JSON key file to manage.
+
+1. Open your sheet, then **Extensions > Apps Script**.
+2. Delete the stub code and paste in all of `google-apps-script.gs`.
+3. Set `SECRET` near the top to any random string. **Keep the quotes**:
+   `const SECRET = "your-secret";`
+4. **Deploy > New deployment**, choose type **Web app**, set *Execute as* to
+   **Me** and *Who has access* to **Anyone**, then Deploy and authorize it.
+   Google warns that the app is unverified because you just wrote it; choose
+   **Advanced > Go to (project) > Allow**.
+5. Copy the Web app URL, which ends in `/exec`, into `.env.local`:
+
+```
+SHEETS_WEBHOOK_URL=https://script.google.com/macros/s/.../exec
+SHEETS_TOKEN=the-same-secret-from-step-3
+```
+
+6. Restart `npm run dev`.
+
+Rows go to a tab named **Bookings**, created automatically, with the columns
+Booking ID, Name, Date, Time, Party Size, Table, Phone, Notes, Booked At.
+Anything already in your spreadsheet is left alone. Booking ID is what a
+cancellation matches on, which is how the right row gets removed.
+
+Two things that catch people out:
+
+- **`SECRET` must be quoted.** Without quotes the script throws and Google
+  returns an HTML error page, so nothing is written.
+- **Editing the script is not enough.** After any change you must go
+  **Deploy > Manage deployments > pencil icon > Version: New version >
+  Deploy**, or the old code keeps running at the same URL.
+
+The sheet is a mirror, never the source of truth. If it cannot be reached, the
+booking or cancellation still succeeds locally and the Bookings panel says the
+sheet is out of step, rather than failing the reservation.

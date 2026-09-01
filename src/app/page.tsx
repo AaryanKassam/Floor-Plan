@@ -13,6 +13,15 @@ import SettingsPanel from "@/components/SettingsPanel";
 import { label12h, slots, todayISO, toHHMM } from "@/lib/time";
 import type { BookingRec, RoomRec, TableRec } from "@/lib/types";
 
+/**
+ * Room-to-room slide. Deliberately unhurried: at half this duration the plans
+ * read as a cut rather than as one room being pushed aside by the next. The
+ * curve eases in gently, holds a visible constant travel, then settles, which
+ * is what makes it feel like a swipe rather than a slide transition.
+ */
+const SWIPE_SECONDS = 0.95;
+const SWIPE_EASE = [0.38, 0.02, 0.16, 1] as const;
+
 interface State {
   venue: { id: number; name: string; free_color: string; booked_color: string } | null;
   rooms: RoomRec[];
@@ -197,7 +206,7 @@ export default function Home() {
               transition={
                 reduce
                   ? { duration: 0.12 }
-                  : { duration: 0.46, ease: [0.32, 0.72, 0, 1] }
+                  : { duration: SWIPE_SECONDS, ease: SWIPE_EASE }
               }
             >
               <FloorPlan
