@@ -54,26 +54,3 @@ used when both are present.
 6. **Settings**, bottom left, changes the floor material and table colours.
 7. **Bookings**, top right, lists and cancels reservations.
 
-## Putting it online
-
-Deploy to Vercel and set `GEMINI_API_KEY` as an environment variable there. The
-key lives on the server, visitors never see it, and nobody needs a key of their
-own. This is the right way to let other people use yours.
-
-Note that the SQLite file does not persist on Vercel. For a real deployment,
-point Prisma or the queries in `src/lib/db.ts` at Postgres.
-
-## Optional: mirror bookings to Google Sheets
-
-Every confirmed reservation can be copied into a Google Sheet. The three minute
-setup is in the comment at the top of `google-apps-script.gs`. Skip it and
-bookings simply stay local.
-
-## Tests
-
-```bash
-node scripts/layout.test.mts
-```
-
-Covers the table placement and combining geometry. Node runs TypeScript
-directly, so there is no test framework to install.
