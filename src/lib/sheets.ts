@@ -96,7 +96,31 @@ export async function deleteBooking(id: number): Promise<SyncOutcome> {
       redirect: "follow",
     });
     if (!res.ok) return { synced: false, reason: `Sheet responded ${res.status}` };
-    return readReply(await res.text());
+
+    const text = await res.text();
+    const outcome = readReply(text);
+    if (!outcome.synced) return outcome;
+
+    // An older deployment has no delete branch: it answers {"ok":true} and
+    // silently appends instead. Treat a missing `deleted` count as a failure,
+    // otherwise the app reports success while the row is still in the sheet.
+    try {
+      const data = JSON.parse(text) as { deleted?: number };
+      if (typeof data.deleted !== "number") {
+        return {
+          synced: false,
+          reason:
+            "The deployed Apps Script is an older version without the delete handler. Re-paste google-apps-script.gs, then Deploy > Manage deployments > edit > Version: New version.",
+        };
+      }
+      if (data.deleted === 0) {
+        return { synced: false, reason: "No matching row found in the sheet." };
+      }
+    } catch {
+      return { synced: false, reason: "Sheet returned a non-JSON response." };
+    }
+
+    return { synced: true };
   } catch (err) {
     return { synced: false, reason: err instanceof Error ? err.message : String(err) };
   }
