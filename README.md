@@ -32,12 +32,6 @@ image. For that you need your own free Google Gemini key:
 `.env.local` is gitignored, so your key stays on your machine and is only ever
 read by the server, never sent to the browser.
 
-**Why you need your own key.** Keys cannot be shared through a public repo. If
-one were committed here, anyone could spend your quota, and Google scans public
-repositories and automatically revokes keys it finds. If you want other people
-to use your key, deploy the app somewhere with the key set as a server
-environment variable, rather than handing the key out.
-
 An `ANTHROPIC_API_KEY` works instead, if you would rather use Claude. Gemini is
 used when both are present.
 
