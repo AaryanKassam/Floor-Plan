@@ -22,6 +22,9 @@
  *       SHEETS_TOKEN=<the same SECRET you set below>
  *  8. Restart `npm run dev`.
  *
+ * Rows go to a tab named "Bookings", created automatically. Anything already
+ * in your spreadsheet is left alone.
+ *
  * If you ever edit this script, you must Deploy -> Manage deployments ->
  * pencil icon -> Version: New version -> Deploy, or the old code keeps running.
  */
@@ -36,16 +39,36 @@ function doPost(e) {
       return json({ ok: false, error: "bad token" });
     }
 
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-    // Write a header row once, on an empty sheet.
-    if (sheet.getLastRow() === 0) {
-      sheet.appendRow([
-        "Booking ID", "Name", "Date", "Time", "Party Size",
-        "Table", "Phone", "Notes", "Created At",
-      ]);
-      sheet.getRange(1, 1, 1, 9).setFontWeight("bold");
+    // Bookings go on their own tab. Using the first sheet meant rows landed
+    // among whatever was already there (old n8n rows, for instance) with
+    // mismatched columns and no headers.
+    const HEADERS = [
+      "Booking ID", "Name", "Date", "Time", "Party Size",
+      "Table", "Phone", "Notes", "Booked At",
+    ];
+    let sheet = ss.getSheetByName("Bookings");
+    if (!sheet) sheet = ss.insertSheet("Bookings");
+
+    // Ensure headers exist, not only when the sheet is brand new.
+    if (sheet.getRange(1, 1).getValue() !== HEADERS[0]) {
+      sheet.insertRowBefore(1);
+      sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]).setFontWeight("bold");
       sheet.setFrozenRows(1);
+    }
+
+    // The app sends UTC. Show it in the spreadsheet's own timezone instead of
+    // a raw ISO string, which reads like a second reservation date.
+    let bookedAt = body.createdAt;
+    try {
+      bookedAt = Utilities.formatDate(
+        new Date(body.createdAt),
+        ss.getSpreadsheetTimeZone(),
+        "yyyy-MM-dd h:mm a"
+      );
+    } catch (e) {
+      // Keep the raw value if the date cannot be parsed.
     }
 
     sheet.appendRow([
@@ -57,7 +80,7 @@ function doPost(e) {
       body.tableNumber,
       body.phone || "",
       body.notes || "",
-      body.createdAt,
+      bookedAt,
     ]);
 
     return json({ ok: true });
