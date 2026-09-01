@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "motion/react";
 import { label12h } from "@/lib/time";
 import type { BookingRec, TableRec } from "@/lib/types";
@@ -23,9 +24,27 @@ export default function InfoPanel({
 }: Props) {
   const tableNumber = (id: number) => tables.find((t) => t.id === id)?.number ?? "?";
 
+  // Cancelling is irreversible and also removes the sheet row, so it asks
+  // once. An inline confirm keeps it in place rather than throwing a browser
+  // dialog over the plan.
+  const [confirmId, setConfirmId] = useState<number | null>(null);
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
+
   async function cancel(id: number) {
-    await fetch(`/api/bookings/${id}`, { method: "DELETE" });
-    onChanged();
+    setBusyId(id);
+    setWarning(null);
+    try {
+      const res = await fetch(`/api/bookings/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (data?.sheet && data.sheet.synced === false) {
+        setWarning(`Cancelled, but the sheet row could not be removed: ${data.sheet.reason}`);
+      }
+    } finally {
+      setBusyId(null);
+      setConfirmId(null);
+      onChanged();
+    }
   }
 
   return (
@@ -59,10 +78,34 @@ export default function InfoPanel({
                     {sheetsConfigured && !b.sheet_synced && (
                       <p className="mt-0.5 text-xs text-[#D9A441]">Not synced to sheet</p>
                     )}
+                    {confirmId === b.id && (
+                      <p className="mt-1 text-xs text-[#E0A99C]">
+                        Cancel this booking{sheetsConfigured ? " and remove it from the sheet" : ""}?
+                        This cannot be undone.
+                      </p>
+                    )}
                   </div>
-                  <button onClick={() => cancel(b.id)} className="btn px-2 py-1 text-xs">
-                    Cancel
-                  </button>
+                  {confirmId === b.id ? (
+                    <div className="flex shrink-0 gap-1">
+                      <button
+                        onClick={() => cancel(b.id)}
+                        disabled={busyId === b.id}
+                        className="btn border-[#7A3B30] px-2 py-1 text-xs"
+                      >
+                        {busyId === b.id ? "Cancelling" : "Yes, cancel"}
+                      </button>
+                      <button onClick={() => setConfirmId(null)} className="btn px-2 py-1 text-xs">
+                        Keep
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => { setConfirmId(b.id); setWarning(null); }}
+                      className="btn shrink-0 px-2 py-1 text-xs"
+                    >
+                      Cancel
+                    </button>
+                  )}
                 </div>
               </li>
             ))}

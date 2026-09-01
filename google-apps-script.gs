@@ -41,6 +41,20 @@ function doPost(e) {
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
 
+    // Cancelling a booking in the app removes its row here too.
+    if (body.action === "delete") {
+      const sh = ss.getSheetByName("Bookings");
+      if (!sh || sh.getLastRow() < 2) return json({ ok: true, deleted: 0 });
+      const ids = sh.getRange(1, 1, sh.getLastRow(), 1).getValues();
+      for (let r = ids.length - 1; r >= 1; r--) {
+        if (String(ids[r][0]) === String(body.id)) {
+          sh.deleteRow(r + 1);
+          return json({ ok: true, deleted: 1 });
+        }
+      }
+      return json({ ok: true, deleted: 0 });
+    }
+
     // Bookings go on their own tab. Using the first sheet meant rows landed
     // among whatever was already there (old n8n rows, for instance) with
     // mismatched columns and no headers.
