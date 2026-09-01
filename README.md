@@ -6,6 +6,9 @@ booked, and you can drag them around to match your real room.
 
 ## Try it with no setup
 
+You need **Node 24 or newer**. Check with `node -v`. The database is Node's
+built in SQLite, so there is nothing else to install.
+
 ```bash
 git clone https://github.com/AaryanKassam/Floor-Plan.git
 cd Floor-Plan
@@ -15,9 +18,6 @@ npm run dev
 
 Open http://localhost:3000 and click **load the demo venue**. That gives you a
 full two room restaurant to click around in, and needs no API key at all.
-
-Requires **Node 24 or newer** (`node -v`). The database is Node's built in
-SQLite, so there is nothing else to install.
 
 ## Uploading your own floor plan
 
@@ -39,6 +39,17 @@ your key, host the app yourself (see below) rather than handing out the key.
 
 An `ANTHROPIC_API_KEY` works instead, if you would rather use Claude. Gemini is
 used when both are present.
+
+**If an upload fails with a model error**, your Google account does not have the
+default model. The message names the problem; fix it by adding a model your
+account does have to `.env.local`:
+
+```
+GEMINI_MODEL=gemini-3.7-flash
+```
+
+Google rotates which models new keys can reach, so this is the most likely
+first-run snag.
 
 ## Using it
 
