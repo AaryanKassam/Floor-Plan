@@ -1,0 +1,17 @@
+node_modules/
+.next/
+out/
+build/
+
+# Secrets — never commit. .env.local holds your Anthropic key.
+.env
+.env.local
+.env*.local
+
+# Local database + uploaded floor plan images
+data/
+public/uploads/
+
+.DS_Store
+*.tsbuildinfo
+next-env.d.ts

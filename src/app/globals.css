@@ -1,0 +1,162 @@
+@import "tailwindcss";
+
+/*
+ * Warm dark chrome so the wood floor is the brightest thing on screen.
+ * Deliberately not pure white, not purple/black, no neon, no pastels.
+ * Corners stay near-square (2px) and depth comes from 1px borders, not shadows.
+ *
+ * Everything below lives in @layer base / @layer components on purpose.
+ * Unlayered CSS beats Tailwind's layered utilities regardless of specificity,
+ * so an unlayered `select { width: 100% }` would silently defeat `w-[120px]`,
+ * and `button { border-radius }` would square off `rounded-full`.
+ */
+@theme {
+  --color-ink: #efe7d9;
+}
+
+:root {
+  --bg: #17140f;
+  --panel: #201c16;
+  --panel-2: #2a241c;
+  --line: #3b342a;
+  --line-strong: #574c3d;
+  --ink: #efe7d9;
+  --ink-muted: #a79b87;
+  --brass: #b8873b;
+  --brass-ink: #17140f;
+
+  --seat-free: #4a6b4f;
+  --seat-booked: #8c3a2e;
+  --seat-edge: #17140f;
+
+  --radius: 2px;
+}
+
+@layer base {
+  html,
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    font-family: var(--font-karla), Helvetica, Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+  }
+
+  input,
+  select,
+  textarea {
+    background: var(--panel-2);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 0.5rem 0.65rem;
+    width: 100%;
+  }
+
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  button:focus-visible,
+  [role="button"]:focus-visible {
+    outline: 2px solid var(--brass);
+    outline-offset: 1px;
+  }
+
+  input[type="date"],
+  input[type="time"] {
+    color-scheme: dark;
+  }
+}
+
+@layer components {
+  .display {
+    font-family: var(--font-playfair), Georgia, serif;
+    letter-spacing: 0.01em;
+  }
+
+  .btn {
+    border: 1px solid var(--line-strong);
+    background: var(--panel-2);
+    color: var(--ink);
+    padding: 0.5rem 0.85rem;
+    cursor: pointer;
+    border-radius: var(--radius);
+  }
+
+  /* State changes are immediate. No hover animation, no easing on colour. */
+  .btn:hover {
+    background: var(--line);
+  }
+
+  .btn-primary {
+    background: var(--brass);
+    color: var(--brass-ink);
+    border-color: var(--brass);
+    font-weight: 600;
+  }
+
+  .btn-primary:hover {
+    background: #c9963f;
+  }
+
+  .btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /*
+   * Chrome draws `outline: auto` (a 5px blue ring) on a focused SVG <g> even
+   * when :focus-visible is FALSE, so an ordinary mouse click on a table drew a
+   * blue box around its bounding rect. Verified: focused=true,
+   * focusVisible=false, outlineColor=rgb(0,95,204). A `:focus-visible` rule
+   * therefore never applied. Suppress the ring and show keyboard focus on the
+   * table shape instead. Once a table is zoomed, the zoom is the indicator.
+   */
+  .table-hit:focus {
+    outline: none;
+  }
+
+  .table-hit:focus-visible .table-shape {
+    stroke: var(--brass);
+    stroke-width: 3px;
+  }
+
+  .table-hit.is-zoomed:focus-visible .table-shape {
+    stroke: var(--seat-edge);
+    stroke-width: 1.5px;
+  }
+
+  .table-hit.is-dragging .table-shape {
+    stroke: var(--brass);
+    stroke-width: 3px;
+  }
+
+  .label {
+    display: block;
+    font-size: 11px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-bottom: 0.35rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
