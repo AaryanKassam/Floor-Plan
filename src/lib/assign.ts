@@ -1,5 +1,5 @@
 import { db, rows, row } from "./db";
-import { DEFAULT_DURATION, SLOT_STEP, slots, toHHMM } from "./time";
+import { DEFAULT_DURATION, SLOT_STEP, SOON_MINUTES, slots, toHHMM } from "./time";
 import type { BookingRec, SeatingPreference, TableRec } from "./types";
 
 /**
@@ -41,23 +41,59 @@ function freeTables(
   outdoor: 0 | 1 | null = null,
   ignoreBookingId: number | null = null
 ): TableRec[] {
+  /*
+   * Ordering, in priority order:
+   *   1. seats  best fit stays primary. Demoting it below the tier would seat a
+   *             party of two at a ten-top whenever a two-top had any booking
+   *             later that day, which wastes the room.
+   *   2. tier   among tables of the SAME size: a clear table first, then one
+   *             whose nearest booking is far off, then one with a booking close
+   *             by. Keeps clear tables clear and leaves turnaround room.
+   *   3. number stable tie-break.
+   *
+   * `day_gap` is the distance in minutes from the wanted slot to the nearest
+   * OTHER booking on that table that day, NULL when it has none. It is also
+   * what drives the yellow/red dots in the UI.
+   */
   const stmt = db.prepare(`
-    SELECT t.* FROM tables t
+    SELECT t.*, gap.g AS day_gap FROM tables t
     JOIN rooms r ON r.id = t.room_id
-    WHERE t.seats >= ?
-      AND (?1IS_NULL? OR r.is_outdoor = ?)
+    LEFT JOIN (
+      SELECT b.table_id AS tid,
+             MIN(CASE WHEN b.start_min >= :at THEN b.start_min - :at
+                      ELSE :at - b.end_min END) AS g
+      FROM bookings b
+      WHERE b.date = :date AND (:ignore IS NULL OR b.id != :ignore)
+      GROUP BY b.table_id
+    ) AS gap ON gap.tid = t.id
+    WHERE t.seats >= :party
+      AND (:outdoor IS NULL OR r.is_outdoor = :outdoor)
       AND NOT EXISTS (
-        SELECT 1 FROM bookings b
-        WHERE b.table_id = t.id
-          AND b.date = ?
-          AND b.start_min < ?
-          AND b.end_min   > ?
-          AND (? IS NULL OR b.id != ?)
+        SELECT 1 FROM bookings b2
+        WHERE b2.table_id = t.id
+          AND b2.date = :date
+          AND b2.start_min < :endMin
+          AND b2.end_min   > :startMin
+          AND (:ignore IS NULL OR b2.id != :ignore)
       )
-    ORDER BY t.seats ASC, t.number ASC
-  `.replace("?1IS_NULL?", "? IS NULL"));
+    ORDER BY
+      t.seats ASC,
+      CASE WHEN gap.g IS NULL THEN 0
+           WHEN gap.g > :soon THEN 1
+           ELSE 2 END ASC,
+      t.number ASC
+  `);
   return rows<TableRec>(
-    stmt.all(partySize, outdoor, outdoor, date, endMin, startMin, ignoreBookingId, ignoreBookingId)
+    stmt.all({
+      at: startMin,
+      date,
+      party: partySize,
+      outdoor,
+      startMin,
+      endMin,
+      ignore: ignoreBookingId,
+      soon: SOON_MINUTES,
+    })
   );
 }
 

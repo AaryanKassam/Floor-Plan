@@ -10,7 +10,7 @@ import InfoPanel from "@/components/InfoPanel";
 import RoomDots from "@/components/RoomDots";
 import DateStrip from "@/components/DateStrip";
 import SettingsPanel from "@/components/SettingsPanel";
-import { label12h, slots, todayISO, toHHMM } from "@/lib/time";
+import { SOON_MINUTES, label12h, slots, todayISO, toHHMM } from "@/lib/time";
 import type { BookingRec, RoomRec, TableRec } from "@/lib/types";
 
 /**
@@ -77,6 +77,26 @@ export default function Home() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [focusedId, reserveOpen, infoOpen, settingsOpen, editing, menu]);
+
+  /**
+   * Tables that are free at the viewed time but have another booking that day.
+   * Distance is measured from the viewed time to the nearest edge of the
+   * booking, so 6pm against a 7pm start is 60 minutes and counts as "soon".
+   */
+  const dayMarks = useMemo(() => {
+    const m = new Map<number, "soon" | "later">();
+    if (!state) return m;
+    for (const b of state.bookings) {
+      const occupiedNow = b.start_min <= viewMin && b.end_min > viewMin;
+      if (occupiedNow) continue;
+      const gap = b.start_min >= viewMin ? b.start_min - viewMin : viewMin - b.end_min;
+      const mark = gap <= SOON_MINUTES ? "soon" : "later";
+      const existing = m.get(b.table_id);
+      // A "soon" booking wins: it is the more urgent fact about the table.
+      if (existing !== "soon") m.set(b.table_id, mark);
+    }
+    return m;
+  }, [state, viewMin]);
 
   const occupancy = useMemo(() => {
     const m = new Map<number, BookingRec>();
@@ -213,6 +233,7 @@ export default function Home() {
                 room={room}
                 tables={roomTables}
                 occupancy={occupancy}
+              dayMarks={dayMarks}
                 focusedId={focusedId}
                 onFocus={setFocusedId}
                 editing={editing}

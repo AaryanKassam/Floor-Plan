@@ -79,6 +79,14 @@ export function isWeekend(iso: string): boolean {
   return day === 0 || day === 6;
 }
 
+/**
+ * A booking closer than this to the slot in question counts as "soon": it
+ * drives both the red/amber table markers and the booking tie-break. Lives
+ * here rather than in assign.ts so client components can import it without
+ * pulling node:sqlite into the browser bundle.
+ */
+export const SOON_MINUTES = 60;
+
 /** Minutes from midnight, right now, in local time. */
 export function nowMin(): number {
   const d = new Date();

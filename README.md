@@ -53,6 +53,10 @@ first-run snag.
 2. The model finds the tables and their seat counts. It will not be perfect,
    which is what the editor is for.
 3. **Click a table** to zoom into it and see or edit its number, seats and shape.
+   A dot beside the seat count means the table is free right now but booked
+   later that day: amber if that booking is more than an hour away, red if it is
+   closer. Booking prefers a table with no dot, then an amber one, so clear
+   tables stay clear and seatings are not packed back to back.
 4. **Reserve a Seat**, top left, books a table: name, party size, time, date and
    an indoor/outdoor preference. The smallest free table that fits is chosen
    automatically, across every room. Past dates and times cannot be booked. If

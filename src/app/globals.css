@@ -29,6 +29,10 @@
   --outdoor: #7d9e6d;
   --outdoor-dim: #3f5236;
 
+  /* Day-booking markers: amber for a booking later on, red for one close by. */
+  --dot-later: #d9a441;
+  --dot-soon: #c2402f;
+
   --seat-free: #4a6b4f;
   --seat-booked: #8c3a2e;
   --seat-edge: #17140f;

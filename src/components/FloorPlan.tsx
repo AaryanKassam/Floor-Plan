@@ -14,6 +14,8 @@ interface Props {
   room: RoomRec;
   tables: TableRec[];
   occupancy: Map<number, BookingRec>;
+  /** Tables with another booking that day: "soon" within an hour, else "later". */
+  dayMarks: Map<number, "soon" | "later">;
   focusedId: number | null;
   onFocus: (id: number | null) => void;
   editing?: boolean;
@@ -60,6 +62,7 @@ export default function FloorPlan({
   room,
   tables,
   occupancy,
+  dayMarks,
   focusedId,
   onFocus,
   editing = false,
@@ -291,7 +294,13 @@ export default function FloorPlan({
               }}
               tabIndex={0}
               role="button"
-              aria-label={`Table ${t.number}, seats ${t.seats}, ${booked ? "booked" : "free"}`}
+              aria-label={`Table ${t.number}, seats ${t.seats}, ${
+                booked
+                  ? "booked"
+                  : dayMarks.has(t.id)
+                    ? `free now, booked ${dayMarks.get(t.id) === "soon" ? "within the hour" : "later today"}`
+                    : "free"
+              }`}
               onKeyDown={(e) => {
                 if (editing) return;
                 if (e.key === "Enter" || e.key === " ") {
@@ -340,19 +349,38 @@ export default function FloorPlan({
                 {t.number}
               </text>
 
-              {!focused && (
-                <text
-                  x={cx}
-                  y={cy + rh / 2 + 13}
-                  textAnchor="middle"
-                  fontSize={14}
-                  fontWeight={700}
-                  fill={spec.ink}
-                  style={{ pointerEvents: "none", userSelect: "none" }}
-                >
-                  {t.seats}
-                </text>
-              )}
+              {!focused && (() => {
+                const mark = booked ? undefined : dayMarks.get(t.id);
+                // Offset the seat count so the marker sits beside it rather
+                // than over it; digits are about 8.4px wide at this size.
+                const half = (String(t.seats).length * 8.4) / 2;
+                const shift = mark ? 6 : 0;
+                return (
+                  <g style={{ pointerEvents: "none", userSelect: "none" }}>
+                    <text
+                      x={cx - shift}
+                      y={cy + rh / 2 + 13}
+                      textAnchor="middle"
+                      fontSize={14}
+                      fontWeight={700}
+                      fill={spec.ink}
+                    >
+                      {t.seats}
+                    </text>
+                    {mark && (
+                      <circle
+                        cx={cx - shift + half + 7}
+                        cy={cy + rh / 2 + 9}
+                        r={3.6}
+                        fill={mark === "soon" ? "var(--dot-soon)" : "var(--dot-later)"}
+                        stroke="#17140F"
+                        strokeWidth={1}
+                        vectorEffect="non-scaling-stroke"
+                      />
+                    )}
+                  </g>
+                );
+              })()}
 
               {booked && !dimmed && (
                 <g style={{ pointerEvents: "none" }}>
