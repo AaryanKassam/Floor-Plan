@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "motion/react";
-import { label12h } from "@/lib/time";
+import { isPast, label12h, slots, toHHMM } from "@/lib/time";
 import type { BookingRec, TableRec } from "@/lib/types";
 
 interface Props {
@@ -30,6 +30,55 @@ export default function InfoPanel({
   const [confirmId, setConfirmId] = useState<number | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
+
+  // Inline edit state for one booking at a time.
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editTime, setEditTime] = useState("18:00");
+  const [editTable, setEditTable] = useState<number | null>(null);
+  const [options, setOptions] = useState<{ id: number; number: number; seats: number }[]>([]);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  /** Ask the server which tables are free for this booking at a given time. */
+  async function loadOptions(bookingId: number, time: string) {
+    const res = await fetch(`/api/bookings/${bookingId}?date=${date}&time=${time}`, {
+      cache: "no-store",
+    });
+    const data = await res.json();
+    const opts = [...(data.options ?? [])];
+    // The table it already sits on is a valid choice but is excluded from the
+    // free list, so add it back.
+    if (data.current && !opts.some((o: { id: number }) => o.id === data.current.id)) {
+      opts.push(data.current);
+    }
+    opts.sort((a: { number: number }, b: { number: number }) => a.number - b.number);
+    setOptions(opts);
+  }
+
+  function beginEdit(b: BookingRec) {
+    setEditId(b.id);
+    setEditError(null);
+    setConfirmId(null);
+    const t = toHHMM(b.start_min);
+    setEditTime(t);
+    setEditTable(b.table_id);
+    void loadOptions(b.id, t);
+  }
+
+  async function saveEdit(bookingId: number) {
+    setEditError(null);
+    const res = await fetch(`/api/bookings/${bookingId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ time: editTime, tableId: editTable, date }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setEditError(data.error ?? "Could not save.");
+      return;
+    }
+    setEditId(null);
+    onChanged();
+  }
 
   async function cancel(id: number) {
     setBusyId(id);
@@ -99,14 +148,75 @@ export default function InfoPanel({
                       </button>
                     </div>
                   ) : (
-                    <button
-                      onClick={() => { setConfirmId(b.id); setWarning(null); }}
-                      className="btn shrink-0 px-2 py-1 text-xs"
-                    >
-                      Cancel
-                    </button>
+                    <div className="flex shrink-0 gap-1">
+                      <button
+                        onClick={() => (editId === b.id ? setEditId(null) : beginEdit(b))}
+                        className="btn px-2 py-1 text-xs"
+                      >
+                        {editId === b.id ? "Close" : "Edit"}
+                      </button>
+                      <button
+                        onClick={() => { setConfirmId(b.id); setWarning(null); }}
+                        className="btn px-2 py-1 text-xs"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   )}
                 </div>
+
+                {editId === b.id && (
+                  <div className="mt-3 border-t border-[var(--line)] pt-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="label" htmlFor={`et-${b.id}`}>Time</label>
+                        <select
+                          id={`et-${b.id}`}
+                          value={editTime}
+                          onChange={(e) => {
+                            setEditTime(e.target.value);
+                            void loadOptions(b.id, e.target.value);
+                          }}
+                        >
+                          {slots()
+                            .filter((s) => !isPast(date, s))
+                            .map((s) => (
+                              <option key={s} value={toHHMM(s)}>{label12h(s)}</option>
+                            ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="label" htmlFor={`eb-${b.id}`}>Table</label>
+                        <select
+                          id={`eb-${b.id}`}
+                          value={editTable ?? ""}
+                          onChange={(e) => setEditTable(Number(e.target.value))}
+                        >
+                          {options.map((o) => (
+                            <option key={o.id} value={o.id}>
+                              {o.number} ({o.seats} seats)
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {options.length === 0 && (
+                      <p className="mt-2 text-xs text-[#D9A441]">
+                        No table is free for {b.party_size} at that time.
+                      </p>
+                    )}
+                    {editError && <p className="mt-2 text-xs text-[#E0A99C]">{editError}</p>}
+
+                    <button
+                      onClick={() => saveEdit(b.id)}
+                      disabled={options.length === 0}
+                      className="btn btn-primary mt-3 w-full text-sm"
+                    >
+                      Save changes
+                    </button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>

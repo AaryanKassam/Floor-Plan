@@ -10,7 +10,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const existing = row<RoomRec>(db.prepare("SELECT * FROM rooms WHERE id = ?").get(roomId));
   if (!existing) return NextResponse.json({ error: "Room not found." }, { status: 404 });
 
-  const body = (await req.json()) as Partial<{ floor: string; name: string }>;
+  const body = (await req.json()) as Partial<{ floor: string; name: string; isOutdoor: boolean }>;
 
   const floor = body.floor === undefined ? existing.floor : String(body.floor);
   const name = body.name === undefined ? existing.name : String(body.name).trim().slice(0, 40);
@@ -20,6 +20,14 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   }
   if (!name) return NextResponse.json({ error: "Room name cannot be empty." }, { status: 400 });
 
-  db.prepare("UPDATE rooms SET floor = ?, name = ? WHERE id = ?").run(floor, name, roomId);
+  const isOutdoor =
+    body.isOutdoor === undefined ? existing.is_outdoor : body.isOutdoor ? 1 : 0;
+
+  db.prepare("UPDATE rooms SET floor = ?, name = ?, is_outdoor = ? WHERE id = ?").run(
+    floor,
+    name,
+    isOutdoor,
+    roomId
+  );
   return NextResponse.json({ ok: true });
 }

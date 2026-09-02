@@ -10,6 +10,7 @@ export async function POST() {
       name: r.name,
       imagePath: null,
       floor: r.floor,
+      isOutdoor: r.isOutdoor,
       tables: r.tables.map((t) => ({ ...t, area: t.area ?? null })),
     }))
   );

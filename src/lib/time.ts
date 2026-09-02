@@ -78,3 +78,17 @@ export function isWeekend(iso: string): boolean {
   const day = parseISO(iso).getDay();
   return day === 0 || day === 6;
 }
+
+/** Minutes from midnight, right now, in local time. */
+export function nowMin(): number {
+  const d = new Date();
+  return d.getHours() * 60 + d.getMinutes();
+}
+
+/** True when this date and time has already passed. */
+export function isPast(dateISO: string, startMin: number): boolean {
+  const today = todayISO();
+  if (dateISO < today) return true;
+  if (dateISO > today) return false;
+  return startMin < nowMin();
+}

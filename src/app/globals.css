@@ -25,6 +25,10 @@
   --brass: #b8873b;
   --brass-ink: #17140f;
 
+  /* Outdoor rooms, muted enough to sit beside the brass without shouting. */
+  --outdoor: #7d9e6d;
+  --outdoor-dim: #3f5236;
+
   --seat-free: #4a6b4f;
   --seat-booked: #8c3a2e;
   --seat-edge: #17140f;

@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS rooms (
   image_path TEXT,
   image_w    INTEGER NOT NULL DEFAULT 1000,
   image_h    INTEGER NOT NULL DEFAULT 680,
-  floor      TEXT    NOT NULL DEFAULT 'white-oak'
+  floor      TEXT    NOT NULL DEFAULT 'white-oak',
+  is_outdoor INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS tables (
@@ -98,6 +99,13 @@ function open(): DatabaseSync {
     db.exec("ALTER TABLE tables ADD COLUMN group_id INTEGER");
   }
 
+  const roomCols = (db.prepare("PRAGMA table_info(rooms)").all() as { name: string }[]).map(
+    (c) => c.name
+  );
+  if (!roomCols.includes("is_outdoor")) {
+    db.exec("ALTER TABLE rooms ADD COLUMN is_outdoor INTEGER NOT NULL DEFAULT 0");
+  }
+
   return db;
 }
 
@@ -116,7 +124,13 @@ export function row<T>(r: unknown): T | null {
 /** Replace the whole venue in one transaction. Used by upload and template. */
 export function replaceVenue(
   venueName: string,
-  roomsIn: { name: string; imagePath: string | null; floor: string; tables: Array<{ number: number; seats: number; shape: string; x: number; y: number; w: number; h: number; area: string | null }> }[]
+  roomsIn: {
+    name: string;
+    imagePath: string | null;
+    floor: string;
+    isOutdoor?: boolean;
+    tables: Array<{ number: number; seats: number; shape: string; x: number; y: number; w: number; h: number; area: string | null }>;
+  }[]
 ): void {
   db.exec("BEGIN IMMEDIATE");
   try {
@@ -128,7 +142,7 @@ export function replaceVenue(
     db.prepare("INSERT INTO venue (id, name) VALUES (1, ?)").run(venueName);
 
     const insRoom = db.prepare(
-      "INSERT INTO rooms (name, sort_order, image_path, image_w, image_h, floor) VALUES (?, ?, ?, 1000, 680, ?)"
+      "INSERT INTO rooms (name, sort_order, image_path, image_w, image_h, floor, is_outdoor) VALUES (?, ?, ?, 1000, 680, ?, ?)"
     );
     const insTable = db.prepare(
       `INSERT INTO tables (room_id, number, seats, shape, x, y, w, h, rotation, area)
@@ -136,7 +150,7 @@ export function replaceVenue(
     );
 
     roomsIn.forEach((r, i) => {
-      const info = insRoom.run(r.name, i, r.imagePath, r.floor);
+      const info = insRoom.run(r.name, i, r.imagePath, r.floor, r.isOutdoor ? 1 : 0);
       const roomId = Number(info.lastInsertRowid);
       for (const t of r.tables) {
         insTable.run(roomId, t.number, t.seats, t.shape, t.x, t.y, t.w, t.h, t.area);

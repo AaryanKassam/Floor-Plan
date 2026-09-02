@@ -53,12 +53,19 @@ first-run snag.
 2. The model finds the tables and their seat counts. It will not be perfect,
    which is what the editor is for.
 3. **Click a table** to zoom into it and see or edit its number, seats and shape.
-4. **Reserve a Seat**, top left, books a table: name, party size, time, date. The
-   smallest free table that fits is chosen automatically, across every room.
-5. **Edit layout**, top left, lets you drag tables around. Hold one against
+4. **Reserve a Seat**, top left, books a table: name, party size, time, date and
+   an indoor/outdoor preference. The smallest free table that fits is chosen
+   automatically, across every room. Past dates and times cannot be booked. If
+   the preferred seating is full but the other kind is free, it asks whether to
+   book that instead rather than seating the guest somewhere they did not pick.
+5. **Bookings**, top right, lists reservations. **Edit** changes a booking's time
+   or table, offering only tables that are actually free and large enough.
+   **Cancel** asks to confirm, then removes it.
+6. **Edit layout**, top left, lets you drag tables around. Hold one against
    another for two seconds to join them into a run, or right click to uncombine.
-6. **Settings**, bottom left, changes the floor material and table colours.
-7. **Bookings**, top right, lists and cancels reservations.
+7. **Settings**, bottom left, changes the floor material and table colours, and
+   marks a room as indoor or outdoor. Outdoor rooms show green on the room
+   selector at the bottom of the screen.
 
 
 ## Optional: mirror bookings to a Google Sheet

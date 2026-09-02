@@ -37,6 +37,15 @@ export default function SettingsPanel({
     onChanged();
   }
 
+  async function setOutdoor(isOutdoor: boolean) {
+    await fetch(`/api/rooms/${room.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isOutdoor }),
+    });
+    onChanged();
+  }
+
   async function setColor(patch: { freeColor?: string; bookedColor?: string }) {
     await fetch("/api/venue", {
       method: "PATCH",
@@ -82,6 +91,34 @@ export default function SettingsPanel({
             </button>
           ))}
         </div>
+
+        <p className="label mt-6">Seating kind, {room.name}</p>
+        <div className="flex gap-2">
+          {[
+            { label: "Indoor", value: false },
+            { label: "Outdoor", value: true },
+          ].map((opt) => {
+            const on = Boolean(room.is_outdoor) === opt.value;
+            return (
+              <button
+                key={opt.label}
+                onClick={() => setOutdoor(opt.value)}
+                aria-pressed={on}
+                className="flex-1 border py-1.5 text-sm"
+                style={{
+                  borderColor: on ? (opt.value ? "var(--outdoor)" : "var(--brass)") : "var(--line)",
+                  background: on ? "var(--panel-2)" : "transparent",
+                }}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-1.5 text-xs text-[var(--ink-muted)]">
+          Guests can ask for indoor or outdoor when booking. Outdoor rooms show green
+          on the room selector.
+        </p>
 
         <p className="label mt-6">Free table colour</p>
         <div className="flex flex-wrap gap-2">

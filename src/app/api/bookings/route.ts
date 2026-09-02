@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { createBooking } from "@/lib/assign";
 import { appendBooking } from "@/lib/sheets";
-import { CLOSE_MIN, OPEN_MIN, isISODate, toHHMM, toMin } from "@/lib/time";
+import { CLOSE_MIN, OPEN_MIN, isISODate, isPast, toHHMM, toMin } from "@/lib/time";
 
 /**
  * Create a reservation.
@@ -44,6 +44,18 @@ export async function POST(req: Request) {
     );
   }
 
+  // Enforced here, not just in the UI: the browser can send anything.
+  if (isPast(date, startMin)) {
+    return NextResponse.json(
+      { error: "That time has already passed. Pick a later slot." },
+      { status: 400 }
+    );
+  }
+
+  const rawPref = String(body.preference ?? "any");
+  const preference =
+    rawPref === "indoor" || rawPref === "outdoor" ? (rawPref as "indoor" | "outdoor") : "any";
+
   const tableCount = db.prepare("SELECT COUNT(*) AS n FROM tables").get() as { n: number };
   if (tableCount.n === 0) {
     return NextResponse.json(
@@ -57,11 +69,20 @@ export async function POST(req: Request) {
     partySize,
     date,
     startMin,
+    preference,
     phone: body.phone ? String(body.phone).slice(0, 40) : null,
     notes: body.notes ? String(body.notes).slice(0, 300) : null,
   });
 
   if (!result.ok) {
+    // A preference miss is a question for the guest, not a dead end: the UI
+    // offers to book the other kind rather than the caller losing the slot.
+    if (result.kind === "preference") {
+      return NextResponse.json(
+        { error: result.reason, offered: result.offered },
+        { status: 409 }
+      );
+    }
     return NextResponse.json(
       { error: result.reason, alternatives: result.alternatives },
       { status: 409 }

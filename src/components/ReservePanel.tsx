@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "motion/react";
-import { label12h, slots, toHHMM } from "@/lib/time";
+import { isPast, label12h, slots, todayISO, toHHMM } from "@/lib/time";
 
 interface Props {
   date: string;
@@ -20,21 +20,30 @@ export default function ReservePanel({ date, onBooked, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [alts, setAlts] = useState<string[]>([]);
   const [success, setSuccess] = useState<string | null>(null);
+  const [preference, setPreference] = useState<"any" | "indoor" | "outdoor">("any");
+  // Set when the wanted seating kind is full but the other kind is free.
+  const [offer, setOffer] = useState<{ kind: string; message: string } | null>(null);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  async function send(pref: "any" | "indoor" | "outdoor") {
     setBusy(true);
     setError(null);
     setAlts([]);
     setSuccess(null);
+    setOffer(null);
     try {
       const res = await fetch("/api/bookings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, partySize, date: bookDate, time, phone }),
+        body: JSON.stringify({ name, partySize, date: bookDate, time, phone, preference: pref }),
       });
       const data = await res.json();
       if (!res.ok) {
+        // The preferred kind is full but the other is free: ask rather than
+        // seating them somewhere they did not choose.
+        if (data.offered) {
+          setOffer({ kind: data.offered, message: data.error });
+          return;
+        }
         setError(data.error ?? "Could not create the booking.");
         setAlts(Array.isArray(data.alternatives) ? data.alternatives : []);
         return;
@@ -48,6 +57,11 @@ export default function ReservePanel({ date, onBooked, onClose }: Props) {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    await send(preference);
   }
 
   return (
@@ -78,16 +92,38 @@ export default function ReservePanel({ date, onBooked, onClose }: Props) {
           <div>
             <label className="label" htmlFor="r-time">Time</label>
             <select id="r-time" value={time} onChange={(e) => setTime(e.target.value)}>
-              {slots().map((s) => (
-                <option key={s} value={toHHMM(s)}>{label12h(s)}</option>
-              ))}
+              {slots()
+                .filter((s) => !isPast(bookDate, s))
+                .map((s) => (
+                  <option key={s} value={toHHMM(s)}>{label12h(s)}</option>
+                ))}
             </select>
           </div>
         </div>
 
         <div>
           <label className="label" htmlFor="r-date">Date</label>
-          <input id="r-date" type="date" value={bookDate} onChange={(e) => setBookDate(e.target.value)} required />
+          <input
+            id="r-date"
+            type="date"
+            min={todayISO()}
+            value={bookDate}
+            onChange={(e) => setBookDate(e.target.value)}
+            required
+          />
+        </div>
+
+        <div>
+          <label className="label" htmlFor="r-pref">Seating</label>
+          <select
+            id="r-pref"
+            value={preference}
+            onChange={(e) => setPreference(e.target.value as "any" | "indoor" | "outdoor")}
+          >
+            <option value="any">No preference</option>
+            <option value="indoor">Prefer indoor</option>
+            <option value="outdoor">Prefer outdoor</option>
+          </select>
         </div>
 
         <div>
@@ -99,6 +135,21 @@ export default function ReservePanel({ date, onBooked, onClose }: Props) {
           {busy ? "Finding a table" : "Book table"}
         </button>
       </form>
+
+      {offer && (
+        <div className="mt-3 border border-[var(--line-strong)] bg-[var(--panel-2)] px-3 py-2 text-sm">
+          <p>{offer.message}</p>
+          <p className="mt-1 text-[var(--ink-muted)]">Would you still like to book?</p>
+          <div className="mt-2 flex gap-2">
+            <button onClick={() => void send("any")} disabled={busy} className="btn btn-primary text-sm">
+              {busy ? "Booking" : `Book ${offer.kind}`}
+            </button>
+            <button onClick={() => setOffer(null)} className="btn text-sm">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {success && (
         <p className="mt-3 border border-[#4A6B4F] bg-[#22301F] px-3 py-2 text-sm">{success}</p>

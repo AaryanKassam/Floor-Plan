@@ -1,6 +1,6 @@
 import { db, rows, row } from "./db";
 import { DEFAULT_DURATION, SLOT_STEP, slots, toHHMM } from "./time";
-import type { BookingRec, TableRec } from "./types";
+import type { BookingRec, SeatingPreference, TableRec } from "./types";
 
 /**
  * Deterministic table assignment. No LLM is involved anywhere in this file —
@@ -17,27 +17,54 @@ export interface BookingRequest {
   durationMin?: number;
   phone?: string | null;
   notes?: string | null;
+  preference?: SeatingPreference;
 }
 
 export type BookingResult =
   | { ok: true; booking: BookingRec; table: TableRec }
-  | { ok: false; reason: string; alternatives: string[] };
+  /** The requested indoor/outdoor preference cannot be met, but the other kind
+   *  is free. Nothing is written; the caller decides whether to ask the guest. */
+  | { ok: false; kind: "preference"; offered: "indoor" | "outdoor"; reason: string }
+  | { ok: false; kind: "full"; reason: string; alternatives: string[] };
 
-/** Tables that are free for [startMin, endMin) on `date`, best fit first. */
-function freeTables(date: string, startMin: number, endMin: number, partySize: number): TableRec[] {
+/**
+ * Tables free for [startMin, endMin) on `date`, best fit first.
+ * `outdoor` filters by the room's seating kind: 1 outdoor, 0 indoor, null any.
+ * `ignoreBookingId` lets an edit exclude the booking being moved, so a booking
+ * never blocks itself.
+ */
+function freeTables(
+  date: string,
+  startMin: number,
+  endMin: number,
+  partySize: number,
+  outdoor: 0 | 1 | null = null,
+  ignoreBookingId: number | null = null
+): TableRec[] {
   const stmt = db.prepare(`
     SELECT t.* FROM tables t
+    JOIN rooms r ON r.id = t.room_id
     WHERE t.seats >= ?
+      AND (?1IS_NULL? OR r.is_outdoor = ?)
       AND NOT EXISTS (
         SELECT 1 FROM bookings b
         WHERE b.table_id = t.id
           AND b.date = ?
           AND b.start_min < ?
           AND b.end_min   > ?
+          AND (? IS NULL OR b.id != ?)
       )
     ORDER BY t.seats ASC, t.number ASC
-  `);
-  return rows<TableRec>(stmt.all(partySize, date, endMin, startMin));
+  `.replace("?1IS_NULL?", "? IS NULL"));
+  return rows<TableRec>(
+    stmt.all(partySize, outdoor, outdoor, date, endMin, startMin, ignoreBookingId, ignoreBookingId)
+  );
+}
+
+function prefToFlag(p: SeatingPreference | undefined): 0 | 1 | null {
+  if (p === "indoor") return 0;
+  if (p === "outdoor") return 1;
+  return null;
 }
 
 /** Nearest other start times that could seat this party, for a helpful 409. */
@@ -48,7 +75,7 @@ function findAlternatives(date: string, wantedStart: number, partySize: number, 
 
   const out: string[] = [];
   for (const s of candidates) {
-    if (freeTables(date, s, s + duration, partySize).length > 0) {
+    if (freeTables(date, s, s + duration, partySize, null, null).length > 0) {
       out.push(toHHMM(s));
       if (out.length === 3) break;
     }
@@ -61,9 +88,29 @@ export function createBooking(req: BookingRequest): BookingResult {
   const startMin = req.startMin;
   const endMin = startMin + duration;
 
+  const wanted = prefToFlag(req.preference);
+
   db.exec("BEGIN IMMEDIATE");
   try {
-    const candidates = freeTables(req.date, startMin, endMin, req.partySize);
+    let candidates = freeTables(req.date, startMin, endMin, req.partySize, wanted);
+
+    if (candidates.length === 0 && wanted !== null) {
+      // The preference cannot be met. If the other kind is free, hand that back
+      // as an offer rather than silently seating them where they did not ask.
+      const other = freeTables(req.date, startMin, endMin, req.partySize, wanted === 1 ? 0 : 1);
+      if (other.length > 0) {
+        db.exec("ROLLBACK");
+        const offered = wanted === 1 ? "indoor" : "outdoor";
+        const asked = wanted === 1 ? "outdoor" : "indoor";
+        return {
+          ok: false,
+          kind: "preference",
+          offered,
+          reason: `No ${asked} table for ${req.partySize} at ${toHHMM(startMin)}. Only ${offered} seating is available.`,
+        };
+      }
+      candidates = [];
+    }
 
     if (candidates.length === 0) {
       db.exec("ROLLBACK");
@@ -76,7 +123,12 @@ export function createBooking(req: BookingRequest): BookingResult {
           ? `No table in this restaurant seats ${req.partySize}.`
           : `All tables for ${req.partySize} are taken at ${toHHMM(startMin)}.`;
 
-      return { ok: false, reason, alternatives: findAlternatives(req.date, startMin, req.partySize, duration) };
+      return {
+        ok: false,
+        kind: "full",
+        reason,
+        alternatives: findAlternatives(req.date, startMin, req.partySize, duration),
+      };
     }
 
     const table = candidates[0]; // best fit: fewest wasted seats
@@ -136,3 +188,95 @@ export function bookingsOn(date: string): BookingRec[] {
 }
 
 export const SLOT_MINUTES = SLOT_STEP;
+
+/* ---------- Editing an existing booking ---------- */
+
+export interface EditRequest {
+  bookingId: number;
+  startMin?: number;
+  tableId?: number;
+  date?: string;
+}
+
+export type EditResult =
+  | { ok: true; booking: BookingRec; table: TableRec }
+  | { ok: false; reason: string };
+
+/**
+ * Move a booking to a different time and/or table.
+ *
+ * Runs the same overlap check as creation, inside the same kind of
+ * transaction, but excludes the booking itself so it never blocks its own
+ * move. A booking that fails validation is left exactly as it was.
+ */
+export function editBooking(req: EditRequest): EditResult {
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const current = row<BookingRec>(
+      db.prepare("SELECT * FROM bookings WHERE id = ?").get(req.bookingId)
+    );
+    if (!current) {
+      db.exec("ROLLBACK");
+      return { ok: false, reason: "Booking not found." };
+    }
+
+    const date = req.date ?? current.date;
+    const startMin = req.startMin ?? current.start_min;
+    const duration = current.end_min - current.start_min;
+    const endMin = startMin + duration;
+    const tableId = req.tableId ?? current.table_id;
+
+    const table = row<TableRec>(db.prepare("SELECT * FROM tables WHERE id = ?").get(tableId));
+    if (!table) {
+      db.exec("ROLLBACK");
+      return { ok: false, reason: "That table no longer exists." };
+    }
+    if (table.seats < current.party_size) {
+      db.exec("ROLLBACK");
+      return {
+        ok: false,
+        reason: `Table ${table.number} seats ${table.seats}, but the party is ${current.party_size}.`,
+      };
+    }
+
+    const clash = db
+      .prepare(
+        `SELECT id FROM bookings
+         WHERE table_id = ? AND date = ? AND id != ? AND start_min < ? AND end_min > ?`
+      )
+      .get(tableId, date, req.bookingId, endMin, startMin);
+    if (clash) {
+      db.exec("ROLLBACK");
+      return { ok: false, reason: `Table ${table.number} is already booked at ${toHHMM(startMin)}.` };
+    }
+
+    db.prepare(
+      "UPDATE bookings SET table_id = ?, date = ?, start_min = ?, end_min = ? WHERE id = ?"
+    ).run(tableId, date, startMin, endMin, req.bookingId);
+
+    db.exec("COMMIT");
+
+    return {
+      ok: true,
+      booking: row<BookingRec>(
+        db.prepare("SELECT * FROM bookings WHERE id = ?").get(req.bookingId)
+      )!,
+      table,
+    };
+  } catch (err) {
+    try {
+      db.exec("ROLLBACK");
+    } catch {
+      /* already rolled back */
+    }
+    throw err;
+  }
+}
+
+/** Tables that could host this booking at a given time, for the edit dropdown. */
+export function tablesForBooking(bookingId: number, date: string, startMin: number): TableRec[] {
+  const b = row<BookingRec>(db.prepare("SELECT * FROM bookings WHERE id = ?").get(bookingId));
+  if (!b) return [];
+  const endMin = startMin + (b.end_min - b.start_min);
+  return freeTables(date, startMin, endMin, b.party_size, null, bookingId);
+}

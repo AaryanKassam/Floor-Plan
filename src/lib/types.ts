@@ -17,6 +17,8 @@ export interface RoomRec {
   image_w: number;
   image_h: number;
   floor: FloorId;
+  /** 1 when this room is outdoor seating, used for booking preferences. */
+  is_outdoor: number;
 }
 
 /**
@@ -65,3 +67,6 @@ export interface ExtractedTable {
   rotation?: number;
   area?: string | null;
 }
+
+/** What a guest asked for when booking. */
+export type SeatingPreference = "indoor" | "outdoor" | "any";

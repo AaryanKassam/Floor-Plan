@@ -8,6 +8,7 @@ import type { ExtractedTable, FloorId } from "./types";
 export interface TemplateRoom {
   name: string;
   floor: FloorId;
+  isOutdoor?: boolean;
   tables: ExtractedTable[];
 }
 
@@ -33,6 +34,7 @@ export const TEMPLATE_ROOMS: TemplateRoom[] = [
   {
     name: "Patio",
     floor: "reclaimed-chestnut",
+    isOutdoor: true,
     tables: [
       { number: 13, seats: 4, shape: "round", x: 0.26, y: 0.28, w: 0.13, h: 0.18, area: "patio" },
       { number: 14, seats: 4, shape: "round", x: 0.5, y: 0.28, w: 0.13, h: 0.18, area: "patio" },
