@@ -7,7 +7,8 @@
  *     https://docs.google.com/spreadsheets/d/1d2NG2yi2isIX6s9O-v8P5r_xD6zo7KxZhuVuxvhDZ_E/edit
  *  2. Extensions -> Apps Script. Delete the placeholder code.
  *  3. Paste this entire file in.
- *  4. Change SECRET below to any random string you invent.
+ *  4. Set SECRET below to any random string you invent, in quotes.
+ *     Left empty, the script rejects everything.
  *  5. Save (disk icon), then Deploy -> New deployment.
  *       - Click the gear next to "Select type" and choose "Web app"
  *       - Description:  table booking
@@ -29,12 +30,18 @@
  * pencil icon -> Version: New version -> Deploy, or the old code keeps running.
  */
 
-const SECRET = "change-me-to-something-random";
+// Leave empty and the script refuses every request. The old placeholder was
+// published in this repo, so a deployment that never changed it would have
+// accepted writes from anyone who found the URL.
+const SECRET = "";
 
 function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents);
 
+    if (!SECRET || SECRET === "change-me-to-something-random") {
+      return json({ ok: false, error: "SECRET is not configured in the Apps Script." });
+    }
     if (body.token !== SECRET) {
       return json({ ok: false, error: "bad token" });
     }

@@ -54,9 +54,27 @@ export default function Home() {
   // for an earlier one, so the plan slides the way the dots imply.
   const [dir, setDir] = useState(1);
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const load = useCallback(async (d: string) => {
-    const res = await fetch(`/api/state?date=${d}`, { cache: "no-store" });
-    setState(await res.json());
+    // An unchecked res.json() here meant a 500 put an error object into state,
+    // and the first state.rooms access then threw with a blank screen.
+    try {
+      const res = await fetch(`/api/state?date=${d}`, { cache: "no-store" });
+      if (!res.ok) {
+        setLoadError(`The server returned ${res.status}.`);
+        return;
+      }
+      const data = (await res.json()) as State;
+      if (!data || !Array.isArray(data.rooms) || !Array.isArray(data.tables)) {
+        setLoadError("The server sent an unexpected response.");
+        return;
+      }
+      setLoadError(null);
+      setState(data);
+    } catch {
+      setLoadError("Could not reach the server. Is the dev server still running?");
+    }
   }, []);
 
   useEffect(() => {
@@ -107,6 +125,20 @@ export default function Home() {
     return m;
   }, [state, viewMin]);
 
+  if (loadError && !state) {
+    return (
+      <div className="grid min-h-screen place-items-center p-8">
+        <div className="max-w-md border border-[var(--line-strong)] bg-[var(--panel)] p-6">
+          <h1 className="display mb-2 text-xl">Cannot load the floor plan</h1>
+          <p className="mb-4 text-sm text-[var(--ink-muted)]">{loadError}</p>
+          <button onClick={() => void load(date)} className="btn btn-primary">
+            Try again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!state) {
     return (
       <div className="grid min-h-screen place-items-center text-[var(--ink-muted)]">
@@ -143,12 +175,24 @@ export default function Home() {
     }));
     if (positions.length > 0) {
       setSaving(true);
-      await fetch("/api/tables/positions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ positions }),
-      });
-      setSaving(false);
+      try {
+        const res = await fetch("/api/tables/positions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ positions }),
+        });
+        if (!res.ok) {
+          // Keep the draft and stay in edit mode: discarding a failed save
+          // would silently throw away the arrangement the user just made.
+          setLoadError("Could not save the layout. Your changes are still here.");
+          return;
+        }
+      } catch {
+        setLoadError("Could not save the layout. Your changes are still here.");
+        return;
+      } finally {
+        setSaving(false);
+      }
     }
     setDraft({});
     setEditing(false);
@@ -250,6 +294,17 @@ export default function Home() {
           </AnimatePresence>
         </div>
       </motion.div>
+
+      {loadError && (
+        <div className="pointer-events-none absolute inset-x-0 top-20 z-30 flex justify-center">
+          <p className="pointer-events-auto border border-[#7A3B30] bg-[#2E1B17] px-3 py-2 text-sm">
+            {loadError}{" "}
+            <button onClick={() => setLoadError(null)} className="underline">
+              Dismiss
+            </button>
+          </p>
+        </div>
+      )}
 
       {/* Top left */}
       <div className="pointer-events-none absolute left-4 top-4 flex items-center gap-3">

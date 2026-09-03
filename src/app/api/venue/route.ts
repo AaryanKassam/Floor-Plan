@@ -7,26 +7,44 @@ export async function PATCH(req: Request) {
   const exists = db.prepare("SELECT id FROM venue WHERE id = 1").get();
   if (!exists) return NextResponse.json({ error: "No venue yet." }, { status: 404 });
 
-  const body = (await req.json()) as Partial<{ freeColor: string; bookedColor: string; name: string }>;
+  let body: Partial<{ freeColor: string; bookedColor: string; name: string }>;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
+
+  // Validate every supplied field BEFORE writing any of them. Interleaving the
+  // two meant a request with a good colour and a bad name persisted the colour
+  // and still returned 400.
+  const sets: string[] = [];
+  const values: (string | number)[] = [];
 
   if (body.freeColor !== undefined) {
     if (!isAllowedFree(body.freeColor)) {
       return NextResponse.json({ error: "That free colour is not in the palette." }, { status: 400 });
     }
-    db.prepare("UPDATE venue SET free_color = ? WHERE id = 1").run(body.freeColor);
+    sets.push("free_color = ?");
+    values.push(body.freeColor);
   }
 
   if (body.bookedColor !== undefined) {
     if (!isAllowedBooked(body.bookedColor)) {
       return NextResponse.json({ error: "That booked colour is not in the palette." }, { status: 400 });
     }
-    db.prepare("UPDATE venue SET booked_color = ? WHERE id = 1").run(body.bookedColor);
+    sets.push("booked_color = ?");
+    values.push(body.bookedColor);
   }
 
   if (body.name !== undefined) {
     const name = String(body.name).trim().slice(0, 60);
     if (!name) return NextResponse.json({ error: "Name cannot be empty." }, { status: 400 });
-    db.prepare("UPDATE venue SET name = ? WHERE id = 1").run(name);
+    sets.push("name = ?");
+    values.push(name);
+  }
+
+  if (sets.length > 0) {
+    db.prepare(`UPDATE venue SET ${sets.join(", ")} WHERE id = 1`).run(...values);
   }
 
   return NextResponse.json({ ok: true });

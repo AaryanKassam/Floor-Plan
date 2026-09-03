@@ -38,20 +38,47 @@ export default function InfoPanel({
   const [options, setOptions] = useState<{ id: number; number: number; seats: number }[]>([]);
   const [editError, setEditError] = useState<string | null>(null);
 
-  /** Ask the server which tables are free for this booking at a given time. */
+  /**
+   * Ask the server which tables are free for this booking at a given time.
+   * The selected table is reconciled against the new list: changing the time
+   * can retire the table that was chosen, and submitting a stale id would
+   * either fail or move the guest somewhere they never picked.
+   */
   async function loadOptions(bookingId: number, time: string) {
-    const res = await fetch(`/api/bookings/${bookingId}?date=${date}&time=${time}`, {
-      cache: "no-store",
-    });
-    const data = await res.json();
+    let data: {
+      options?: { id: number; number: number; seats: number }[];
+      current?: { id: number; number: number; seats: number };
+    };
+    try {
+      const res = await fetch(`/api/bookings/${bookingId}?date=${date}&time=${time}`, {
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        setOptions([]);
+        setEditTable(null);
+        setEditError("Could not load available tables for that time.");
+        return;
+      }
+      data = await res.json();
+    } catch {
+      setOptions([]);
+      setEditTable(null);
+      setEditError("Could not reach the server.");
+      return;
+    }
+
     const opts = [...(data.options ?? [])];
     // The table it already sits on is a valid choice but is excluded from the
     // free list, so add it back.
-    if (data.current && !opts.some((o: { id: number }) => o.id === data.current.id)) {
+    if (data.current && !opts.some((o) => o.id === data.current!.id)) {
       opts.push(data.current);
     }
-    opts.sort((a: { number: number }, b: { number: number }) => a.number - b.number);
+    opts.sort((a, b) => a.number - b.number);
     setOptions(opts);
+    setEditError(opts.length === 0 ? "No tables are free at that time." : null);
+    setEditTable((cur) =>
+      cur != null && opts.some((o) => o.id === cur) ? cur : (opts[0]?.id ?? null)
+    );
   }
 
   function beginEdit(b: BookingRec) {
@@ -65,6 +92,10 @@ export default function InfoPanel({
   }
 
   async function saveEdit(bookingId: number) {
+    if (editTable == null) {
+      setEditError("Pick a table first.");
+      return;
+    }
     setEditError(null);
     const res = await fetch(`/api/bookings/${bookingId}`, {
       method: "PATCH",

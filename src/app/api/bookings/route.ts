@@ -22,13 +22,17 @@ export async function POST(req: Request) {
   const name = String(body.name ?? "").trim();
   const date = String(body.date ?? "").trim();
   const time = String(body.time ?? "").trim();
-  const partySize = Math.round(Number(body.partySize));
+  // Not Math.round: 2.5 people is a typo, not a party of three.
+  const partySize = Number(body.partySize);
 
   if (!name) return NextResponse.json({ error: "Name is required." }, { status: 400 });
   if (name.length > 80) return NextResponse.json({ error: "Name is too long." }, { status: 400 });
   if (!isISODate(date)) return NextResponse.json({ error: "Date must be YYYY-MM-DD." }, { status: 400 });
-  if (!Number.isFinite(partySize) || partySize < 1 || partySize > 30) {
-    return NextResponse.json({ error: "Party size must be between 1 and 30." }, { status: 400 });
+  if (!Number.isInteger(partySize) || partySize < 1 || partySize > 30) {
+    return NextResponse.json(
+      { error: "Party size must be a whole number between 1 and 30." },
+      { status: 400 }
+    );
   }
 
   let startMin: number;

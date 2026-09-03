@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import { isPast, label12h, slots, todayISO, toHHMM } from "@/lib/time";
 
@@ -15,6 +15,16 @@ export default function ReservePanel({ date, onBooked, onClose }: Props) {
   const [partySize, setPartySize] = useState(2);
   const [time, setTime] = useState("18:00");
   const [bookDate, setBookDate] = useState(date);
+
+  // Past slots are hidden, so the chosen time can stop existing when the date
+  // changes. Left alone, the select renders blank while state still holds the
+  // stale value and the booking is rejected by the server.
+  const available = useMemo(() => slots().filter((s) => !isPast(bookDate, s)), [bookDate]);
+
+  useEffect(() => {
+    if (available.length === 0) return;
+    if (!available.some((s) => toHHMM(s) === time)) setTime(toHHMM(available[0]));
+  }, [available, time]);
   const [phone, setPhone] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -92,8 +102,7 @@ export default function ReservePanel({ date, onBooked, onClose }: Props) {
           <div>
             <label className="label" htmlFor="r-time">Time</label>
             <select id="r-time" value={time} onChange={(e) => setTime(e.target.value)}>
-              {slots()
-                .filter((s) => !isPast(bookDate, s))
+              {available
                 .map((s) => (
                   <option key={s} value={toHHMM(s)}>{label12h(s)}</option>
                 ))}

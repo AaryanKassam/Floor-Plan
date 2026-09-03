@@ -98,8 +98,21 @@ export default function UploadScreen({ provider, onLoaded }: Props) {
 
   async function loadTemplate() {
     setRunning(true);
+    setError(null);
     setStepLabel("Loading the demo venue");
-    await fetch("/api/layout/template", { method: "POST" });
+    try {
+      const res = await fetch("/api/layout/template", { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}) as { error?: string });
+        setError(data.error ?? "Could not load the demo venue.");
+        setRunning(false);
+        return;
+      }
+    } catch {
+      setError("Could not load the demo venue. Check the dev server console.");
+      setRunning(false);
+      return;
+    }
     setFinished(true);
     setTimeout(onLoaded, 420);
   }
