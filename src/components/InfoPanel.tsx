@@ -40,6 +40,7 @@ export default function InfoPanel({
   // Monotonic token: option lookups race when the time select is changed
   // quickly, and a slow earlier reply must not overwrite a newer one.
   const optionsReq = useRef(0);
+  const [optionsLoading, setOptionsLoading] = useState(false);
 
   /**
    * Ask the server which tables are free for this booking at a given time.
@@ -50,6 +51,10 @@ export default function InfoPanel({
   async function loadOptions(bookingId: number, time: string) {
     const token = ++optionsReq.current;
     const stale = () => token !== optionsReq.current;
+    // Saving is blocked while this runs: the table list belongs to the old
+    // time until the reply lands, and submitting from it could move a guest
+    // to a table that is not actually free at the new time.
+    setOptionsLoading(true);
     let data: {
       options?: { id: number; number: number; seats: number }[];
       current?: { id: number; number: number; seats: number };
@@ -59,6 +64,7 @@ export default function InfoPanel({
         cache: "no-store",
       });
       if (stale()) return;
+      setOptionsLoading(false);
       if (!res.ok) {
         setOptions([]);
         setEditTable(null);
@@ -69,6 +75,7 @@ export default function InfoPanel({
       if (stale()) return;
     } catch {
       if (stale()) return;
+      setOptionsLoading(false);
       setOptions([]);
       setEditTable(null);
       setEditError("Could not reach the server.");
@@ -82,6 +89,7 @@ export default function InfoPanel({
       opts.push(data.current);
     }
     opts.sort((a, b) => a.number - b.number);
+    setOptionsLoading(false);
     setOptions(opts);
     setEditError(opts.length === 0 ? "No tables are free at that time." : null);
     setEditTable((cur) =>
@@ -100,6 +108,7 @@ export default function InfoPanel({
   }
 
   async function saveEdit(bookingId: number) {
+    if (optionsLoading) return;
     if (editTable == null) {
       setEditError("Pick a table first.");
       return;
@@ -228,19 +237,22 @@ export default function InfoPanel({
                         <label className="label" htmlFor={`eb-${b.id}`}>Table</label>
                         <select
                           id={`eb-${b.id}`}
-                          value={editTable ?? ""}
+                          value={optionsLoading ? "" : (editTable ?? "")}
+                          disabled={optionsLoading}
                           onChange={(e) => setEditTable(Number(e.target.value))}
                         >
-                          {options.map((o) => (
-                            <option key={o.id} value={o.id}>
-                              {o.number} ({o.seats} seats)
-                            </option>
-                          ))}
+                          {optionsLoading && <option value="">Checking availability</option>}
+                          {!optionsLoading &&
+                            options.map((o) => (
+                              <option key={o.id} value={o.id}>
+                                {o.number} ({o.seats} seats)
+                              </option>
+                            ))}
                         </select>
                       </div>
                     </div>
 
-                    {options.length === 0 && (
+                    {!optionsLoading && options.length === 0 && (
                       <p className="mt-2 text-xs text-[#D9A441]">
                         No table is free for {b.party_size} at that time.
                       </p>
@@ -249,10 +261,10 @@ export default function InfoPanel({
 
                     <button
                       onClick={() => saveEdit(b.id)}
-                      disabled={options.length === 0}
+                      disabled={optionsLoading || options.length === 0}
                       className="btn btn-primary mt-3 w-full text-sm"
                     >
-                      Save changes
+                      {optionsLoading ? "Checking availability" : "Save changes"}
                     </button>
                   </div>
                 )}

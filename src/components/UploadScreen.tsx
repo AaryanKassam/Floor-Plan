@@ -67,6 +67,10 @@ export default function UploadScreen({ provider, onLoaded }: Props) {
     setError(null);
     setDone(0);
 
+    // The first image mints an upload session; the rest must present it, so a
+    // stale or concurrent upload cannot append rooms to someone else's venue.
+    let session = "";
+
     for (let i = 0; i < pending.length; i++) {
       setStepLabel(`Reading ${pending[i].name}, image ${i + 1} of ${pending.length}`);
       const fd = new FormData();
@@ -74,6 +78,7 @@ export default function UploadScreen({ provider, onLoaded }: Props) {
       fd.append("name", pending[i].name);
       fd.append("index", String(i));
       fd.append("venue", venue.trim() || "My Restaurant");
+      if (session) fd.append("session", session);
 
       try {
         const res = await fetch("/api/layout/extract", { method: "POST", body: fd });
@@ -83,6 +88,7 @@ export default function UploadScreen({ provider, onLoaded }: Props) {
           setRunning(false);
           return;
         }
+        if (typeof data.session === "string") session = data.session;
         setDone(i + 1);
       } catch {
         setError("Upload failed. Check the dev server console.");

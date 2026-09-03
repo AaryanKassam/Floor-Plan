@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS venue (
   id           INTEGER PRIMARY KEY CHECK (id = 1),
   name         TEXT NOT NULL DEFAULT 'My Restaurant',
   free_color   TEXT NOT NULL DEFAULT '#4A6B4F',
-  booked_color TEXT NOT NULL DEFAULT '#8C3A2E'
+  booked_color TEXT NOT NULL DEFAULT '#8C3A2E',
+  upload_session TEXT
 );
 
 CREATE TABLE IF NOT EXISTS rooms (
@@ -90,6 +91,9 @@ function open(): DatabaseSync {
   }
   if (!venueCols.includes("booked_color")) {
     db.exec("ALTER TABLE venue ADD COLUMN booked_color TEXT NOT NULL DEFAULT '#8C3A2E'");
+  }
+  if (!venueCols.includes("upload_session")) {
+    db.exec("ALTER TABLE venue ADD COLUMN upload_session TEXT");
   }
 
   const tableCols = (db.prepare("PRAGMA table_info(tables)").all() as { name: string }[]).map(

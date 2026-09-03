@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { db, rows } from "@/lib/db";
+import { db, row, rows } from "@/lib/db";
 import { extractTables } from "@/lib/vision";
 import type { MediaType } from "@/lib/vision";
 
@@ -30,6 +30,7 @@ export async function POST(req: Request) {
     const roomName = String(form.get("name") ?? "").trim() || "Main Floor";
     const index = Number(form.get("index") ?? 0);
     const venueName = String(form.get("venue") ?? "").trim() || "My Restaurant";
+    const session = String(form.get("session") ?? "").trim();
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "No file uploaded." }, { status: 400 });
@@ -50,18 +51,31 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid image index." }, { status: 400 });
     }
 
-    // A continuation (index > 0) only makes sense against a venue that the
-    // matching index-0 request created. Without this, a stale second image
-    // from an abandoned upload could graft a room onto a different venue.
+    /*
+     * Multi-image uploads are one session. index 0 mints a session id and
+     * stores it on the venue; every later image must present the same id.
+     * Without it a second image from an abandoned upload, or from someone
+     * else uploading at the same time, could graft a room onto a venue it
+     * never belonged to.
+     */
+    const current = row<{ upload_session: string | null }>(
+      db.prepare("SELECT upload_session FROM venue WHERE id = 1").get()
+    );
     if (index > 0) {
-      const venue = db.prepare("SELECT id FROM venue WHERE id = 1").get();
-      if (!venue) {
+      if (!current) {
         return NextResponse.json(
           { error: "Start the upload again: the first image was not saved." },
           { status: 409 }
         );
       }
+      if (!session || session !== current.upload_session) {
+        return NextResponse.json(
+          { error: "This upload is out of date. Start again from the first image." },
+          { status: 409 }
+        );
+      }
     }
+    const sessionId = index === 0 ? randomUUID() : session;
 
     const buf = Buffer.from(await file.arrayBuffer());
 
@@ -96,7 +110,10 @@ export async function POST(req: Request) {
         db.exec("DELETE FROM tables");
         db.exec("DELETE FROM rooms");
         db.exec("DELETE FROM venue");
-        db.prepare("INSERT INTO venue (id, name) VALUES (1, ?)").run(venueName);
+        db.prepare("INSERT INTO venue (id, name, upload_session) VALUES (1, ?, ?)").run(
+          venueName,
+          sessionId
+        );
       }
 
       const base = (
@@ -133,6 +150,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       ok: true,
+      session: sessionId,
       room: roomName,
       count: result.tables.length,
       provider: result.provider,

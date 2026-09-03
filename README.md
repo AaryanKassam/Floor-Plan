@@ -78,10 +78,16 @@ Every confirmed reservation can be appended to a Google Sheet, and cancelling a
 booking removes its row again. This is optional. Without it, bookings simply
 stay in the local database.
 
-It uses an Apps Script Web App bound to your sheet, so there is no Google Cloud
+**You connect your own spreadsheet.** Nothing is shared and there is no default
+sheet: this repo ships no spreadsheet link and no credentials, so a fresh clone
+writes nowhere until you point it at a sheet you own. Your bookings only ever
+go to your sheet, and never to anyone else's.
+
+It uses an Apps Script Web App bound to that sheet, so there is no Google Cloud
 project, no service account and no JSON key file to manage.
 
-1. Open your sheet, then **Extensions > Apps Script**.
+1. Create or open the Google Sheet you want to use, then **Extensions >
+   Apps Script**.
 2. Delete the stub code and paste in all of `google-apps-script.gs`.
 3. Set `SECRET` near the top to any random string. **Keep the quotes**:
    `const SECRET = "your-secret";`
@@ -89,7 +95,9 @@ project, no service account and no JSON key file to manage.
    **Me** and *Who has access* to **Anyone**, then Deploy and authorize it.
    Google warns that the app is unverified because you just wrote it; choose
    **Advanced > Go to (project) > Allow**.
-5. Copy the Web app URL, which ends in `/exec`, into `.env.local`:
+5. Copy the Web app URL, which ends in `/exec`. Put it in `.env.local` in the
+   project root, creating that file from `.env.local.example` if you have not
+   already:
 
 ```
 SHEETS_WEBHOOK_URL=https://script.google.com/macros/s/.../exec
