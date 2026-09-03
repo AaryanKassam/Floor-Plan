@@ -9,7 +9,11 @@ export async function PATCH(req: Request) {
 
   let body: Partial<{ freeColor: string; bookedColor: string; name: string }>;
   try {
-    body = await req.json();
+    const parsed: unknown = await req.json();
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return NextResponse.json({ error: "Expected a JSON object." }, { status: 400 });
+    }
+    body = parsed as typeof body;
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }

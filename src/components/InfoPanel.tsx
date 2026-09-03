@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { motion } from "motion/react";
 import { isPast, label12h, slots, toHHMM } from "@/lib/time";
 import type { BookingRec, TableRec } from "@/lib/types";
@@ -37,6 +37,9 @@ export default function InfoPanel({
   const [editTable, setEditTable] = useState<number | null>(null);
   const [options, setOptions] = useState<{ id: number; number: number; seats: number }[]>([]);
   const [editError, setEditError] = useState<string | null>(null);
+  // Monotonic token: option lookups race when the time select is changed
+  // quickly, and a slow earlier reply must not overwrite a newer one.
+  const optionsReq = useRef(0);
 
   /**
    * Ask the server which tables are free for this booking at a given time.
@@ -45,6 +48,8 @@ export default function InfoPanel({
    * either fail or move the guest somewhere they never picked.
    */
   async function loadOptions(bookingId: number, time: string) {
+    const token = ++optionsReq.current;
+    const stale = () => token !== optionsReq.current;
     let data: {
       options?: { id: number; number: number; seats: number }[];
       current?: { id: number; number: number; seats: number };
@@ -53,6 +58,7 @@ export default function InfoPanel({
       const res = await fetch(`/api/bookings/${bookingId}?date=${date}&time=${time}`, {
         cache: "no-store",
       });
+      if (stale()) return;
       if (!res.ok) {
         setOptions([]);
         setEditTable(null);
@@ -60,7 +66,9 @@ export default function InfoPanel({
         return;
       }
       data = await res.json();
+      if (stale()) return;
     } catch {
+      if (stale()) return;
       setOptions([]);
       setEditTable(null);
       setEditError("Could not reach the server.");

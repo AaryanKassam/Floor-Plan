@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { db, rows } from "@/lib/db";
@@ -49,6 +50,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid image index." }, { status: 400 });
     }
 
+    // A continuation (index > 0) only makes sense against a venue that the
+    // matching index-0 request created. Without this, a stale second image
+    // from an abandoned upload could graft a room onto a different venue.
+    if (index > 0) {
+      const venue = db.prepare("SELECT id FROM venue WHERE id = 1").get();
+      if (!venue) {
+        return NextResponse.json(
+          { error: "Start the upload again: the first image was not saved." },
+          { status: 409 }
+        );
+      }
+    }
+
     const buf = Buffer.from(await file.arrayBuffer());
 
     // Extract BEFORE touching the database. Resetting up front meant a failed
@@ -57,7 +71,9 @@ export async function POST(req: Request) {
     const result = await extractTables(buf.toString("base64"), file.type as MediaType, 1);
 
     const ext = file.type.split("/")[1].replace("jpeg", "jpg");
-    const filename = `room-${Date.now()}-${index}.${ext}`;
+    // randomUUID, not just the timestamp: two uploads in the same
+    // millisecond with the same index would otherwise overwrite each other.
+    const filename = `room-${Date.now()}-${randomUUID().slice(0, 8)}.${ext}`;
     await fs.mkdir(UPLOAD_DIR, { recursive: true });
     writtenPath = path.join(UPLOAD_DIR, filename);
     await fs.writeFile(writtenPath, buf);

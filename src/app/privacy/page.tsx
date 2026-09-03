@@ -9,8 +9,11 @@ export default function Privacy() {
         <p>
           <strong className="text-[var(--ink)]">What is stored.</strong> Guest name,
           party size, date, time, and optional phone number, in a SQLite file on the
-          machine running this app, plus the floor plan images you upload. No other
-          personal data is collected, and there is no tracking of visitors.
+          machine running this app, plus the floor plan images you upload. The optional
+          notes field is free text, so anything typed there is stored and, when the
+          sheet mirror is enabled, copied to your spreadsheet; avoid putting
+          sensitive details in it. No other personal data is collected, and there is
+          no tracking of visitors.
         </p>
         <p>
           <strong className="text-[var(--ink)]">Floor plan images.</strong> Images you

@@ -22,7 +22,10 @@ export default function ReservePanel({ date, onBooked, onClose }: Props) {
   const available = useMemo(() => slots().filter((s) => !isPast(bookDate, s)), [bookDate]);
 
   useEffect(() => {
-    if (available.length === 0) return;
+    if (available.length === 0) {
+      setTime("");
+      return;
+    }
     if (!available.some((s) => toHHMM(s) === time)) setTime(toHHMM(available[0]));
   }, [available, time]);
   const [phone, setPhone] = useState("");
@@ -101,7 +104,13 @@ export default function ReservePanel({ date, onBooked, onClose }: Props) {
           </div>
           <div>
             <label className="label" htmlFor="r-time">Time</label>
-            <select id="r-time" value={time} onChange={(e) => setTime(e.target.value)}>
+            <select
+              id="r-time"
+              value={time}
+              onChange={(e) => setTime(e.target.value)}
+              disabled={available.length === 0}
+            >
+              {available.length === 0 && <option value="">No times left today</option>}
               {available
                 .map((s) => (
                   <option key={s} value={toHHMM(s)}>{label12h(s)}</option>
@@ -140,7 +149,11 @@ export default function ReservePanel({ date, onBooked, onClose }: Props) {
           <input id="r-phone" value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={40} />
         </div>
 
-        <button type="submit" disabled={busy} className="btn btn-primary w-full">
+        <button
+          type="submit"
+          disabled={busy || available.length === 0}
+          className="btn btn-primary w-full"
+        >
           {busy ? "Finding a table" : "Book table"}
         </button>
       </form>
