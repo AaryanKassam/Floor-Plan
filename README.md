@@ -86,25 +86,49 @@ go to your sheet, and never to anyone else's.
 It uses an Apps Script Web App bound to that sheet, so there is no Google Cloud
 project, no service account and no JSON key file to manage.
 
+**The script you need is already in this repo**, at `google-apps-script.gs` in
+the project root. You do not write any code; you copy that file into Google's
+editor. First, generate a secret and copy the script to your clipboard:
+
+```bash
+node -e "console.log(crypto.randomUUID())"   # your secret, copy the output
+pbcopy < google-apps-script.gs               # macOS. Linux: xclip -sel clip < google-apps-script.gs
+```
+
+On Windows, or if those commands are not available, just open
+`google-apps-script.gs` in your editor and copy all of it by hand.
+
 1. Create or open the Google Sheet you want to use, then **Extensions >
-   Apps Script**.
-2. Delete the stub code and paste in all of `google-apps-script.gs`.
-3. Set `SECRET` near the top to any random string. **Keep the quotes**:
-   `const SECRET = "your-secret";`
-4. **Deploy > New deployment**, choose type **Web app**, set *Execute as* to
-   **Me** and *Who has access* to **Anyone**, then Deploy and authorize it.
-   Google warns that the app is unverified because you just wrote it; choose
-   **Advanced > Go to (project) > Allow**.
-5. Copy the Web app URL, which ends in `/exec`. Put it in `.env.local` in the
+   Apps Script** in its menu bar. A code editor opens in a new tab, with a
+   file called `Code.gs` containing a stub `myFunction`.
+2. Select everything in `Code.gs`, delete it, and paste in the whole of
+   `google-apps-script.gs`.
+3. Find the line `const SECRET = "";` near the top, around line 36, and put
+   your generated secret between the quotes. **Keep the quotes**:
+   `const SECRET = "1a82fd47-d0ab-4c0d-b805-7f3552801a40";`
+   Left empty, the script rejects every request on purpose.
+4. Save with the disk icon, or Ctrl+S / Cmd+S. Saving alone does not publish
+   anything; the next step does.
+5. **Deploy > New deployment**. Click the gear next to *Select type* and choose
+   **Web app**. Set *Execute as* to **Me** and *Who has access* to **Anyone**,
+   then **Deploy** and authorize it. Google warns that the app is unverified,
+   because you just wrote it: choose **Advanced > Go to (project name)
+   (unsafe) > Allow**. That warning is expected for your own script.
+6. Copy the Web app URL, which ends in `/exec`. Put it in `.env.local` in the
    project root, creating that file from `.env.local.example` if you have not
    already:
 
-```
-SHEETS_WEBHOOK_URL=https://script.google.com/macros/s/.../exec
-SHEETS_TOKEN=the-same-secret-from-step-3
-```
+   ```
+   SHEETS_WEBHOOK_URL=https://script.google.com/macros/s/.../exec
+   SHEETS_TOKEN=the-same-secret-from-step-3
+   ```
 
-6. Restart `npm run dev`.
+7. Restart `npm run dev`. Make a test booking, and check the **Bookings** tab
+   of your sheet.
+
+`SHEETS_TOKEN` must match `SECRET` exactly. They are the shared password
+between your app and your script; requests without it are rejected, which is
+why *Who has access: Anyone* is safe.
 
 Rows go to a tab named **Bookings**, created automatically, with the columns
 Booking ID, Name, Date, Time, Party Size, Table, Phone, Notes, Booked At.
